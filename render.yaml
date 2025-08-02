@@ -1,0 +1,7 @@
+services:
+  - type: cron
+    name: telegram-stock-bot
+    schedule: "*/5 * * * *"
+    runtime: python
+    buildCommand: ""
+    startCommand: "python app.py"
