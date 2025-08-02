@@ -2,12 +2,7 @@ services:
   - type: worker
     name: stock-signal-bot
     env: python
-    repo: https://github.com/IsherCoder/stock-signal-bot
-    branch: main
     plan: free
+    branch: main
+    buildCommand: pip install -r requirements.txt
     startCommand: python app.py
-    envVars:
-      - key: TELEGRAM_API
-        value: 7957629826:AAG4yUMTw7lzDpFiQOApEyMJfF99sH93E0U
-      - key: TELEGRAM_USER_ID
-        value: your_actual_user_id

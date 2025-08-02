@@ -1,66 +1,57 @@
+import time
 import yfinance as yf
-import ta
 import pandas as pd
+from ta.momentum import RSIIndicator
+from ta.trend import SMAIndicator
 import requests
 
-# --- SETTINGS ---
-symbol = "AAPL"
-BOT_TOKEN = "7957629826:AAG4yUMTw7lzDpFiQOApEyMJfF99sH93E0U"
-CHAT_ID = "8419695857"
+# Telegram credentials
+BOT_TOKEN = '7957629826:AAG4yUMTw7lzDpFiQOApEyMJfF99sH93E0U'
+CHAT_ID = '8419695857'
 
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": message,
-        "parse_mode": "Markdown"
-    }
+    payload = {"chat_id": CHAT_ID, "text": message}
+    requests.post(url, data=payload)
+
+def run_bot():
+    symbol = "AAPL"
+    data = yf.download(symbol, period="12mo", interval="1d")
+
+    close = data["Close"]
+
+    rsi = RSIIndicator(close=close, window=14).rsi()
+    sma_50 = SMAIndicator(close=close, window=50).sma_indicator()
+    sma_200 = SMAIndicator(close=close, window=200).sma_indicator()
+
+    latest_price = close.iloc[-1]
+    latest_rsi = rsi.iloc[-1]
+    latest_sma_50 = sma_50.iloc[-1]
+    latest_sma_200 = sma_200.iloc[-1]
+
+    signal = "📊 Hold: No strong signal"
+    if pd.isna(latest_rsi) or pd.isna(latest_sma_50) or pd.isna(latest_sma_200):
+        signal = "⚠️ Not enough data for indicators."
+    elif latest_rsi < 30 and latest_sma_50 > latest_sma_200:
+        signal = "📈 BUY signal: RSI < 30 and SMA50 > SMA200"
+    elif latest_rsi > 70 and latest_sma_50 < latest_sma_200:
+        signal = "📉 SELL signal: RSI > 70 and SMA50 < SMA200"
+
+    msg = (
+        f"--- Signal for {symbol} ---\n"
+        f"Price: £{latest_price:.2f}\n"
+        f"RSI: {latest_rsi:.2f}\n"
+        f"50-day SMA: £{latest_sma_50:.2f}\n"
+        f"200-day SMA: £{latest_sma_200:.2f}\n"
+        f"{signal}"
+    )
+    print(msg)
+    send_telegram_message(msg)
+
+# Main loop: run every 5 minutes
+while True:
     try:
-        requests.post(url, data=payload)
+        run_bot()
     except Exception as e:
-        print("Telegram Error:", e)
-
-# --- FETCH DATA ---
-data = yf.download(symbol, period="12mo", interval="1d")
-data.dropna(inplace=True)
-
-close_series = data["Close"]
-if isinstance(close_series, pd.DataFrame):
-    close_series = close_series.iloc[:, 0]
-
-rsi = ta.momentum.RSIIndicator(close=close_series, window=14)
-sma50 = ta.trend.SMAIndicator(close=close_series, window=50)
-sma200 = ta.trend.SMAIndicator(close=close_series, window=200)
-
-data["RSI"] = rsi.rsi()
-data["SMA_50"] = sma50.sma_indicator()
-data["SMA_200"] = sma200.sma_indicator()
-data.dropna(inplace=True)
-
-latest = data.iloc[-1]
-
-try:
-    price = float(latest["Close"])
-    latest_rsi = float(latest["RSI"])
-    latest_sma50 = float(latest["SMA_50"])
-    latest_sma200 = float(latest["SMA_200"])
-except (TypeError, ValueError):
-    send_telegram_message("❗ Not enough data to generate signal.")
-    exit()
-
-# --- BUILD MESSAGE ---
-message = f"📈 *Signal for {symbol}*\n"
-message += f"Price: £{round(price, 2)}\n"
-message += f"RSI: {round(latest_rsi, 2)}\n"
-message += f"SMA50: £{round(latest_sma50, 2)}\n"
-message += f"SMA200: £{round(latest_sma200, 2)}\n"
-
-if latest_rsi < 30 and latest_sma50 > latest_sma200:
-    signal = "✅ *Buy Signal*: Oversold and trending up"
-elif latest_rsi > 70:
-    signal = "❌ *Sell Signal*: Overbought"
-else:
-    signal = "📊 *Hold*: No strong signal"
-
-message += f"\n{signal}"
-send_telegram_message(message)
+        send_telegram_message(f"❌ Bot error: {e}")
+    time.sleep(300)  # 5 minutes
